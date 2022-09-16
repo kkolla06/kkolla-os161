@@ -1,0 +1,263 @@
+Step 1:
+ssh-linux3:~/os161/root> sys161 kernel
+sys161: System/161 release 2.0.3, compiled Aug 10 2015 13:31:07
+
+OS/161 base system version 1.99.08
+Copyright (c) 2000, 2001-2005, 2008-2011, 2013, 2014
+   President and Fellows of Harvard College.  All rights reserved.
+
+Put-your-group-name-here's system version 0 (DUMBVM #1)
+
+292k physical memory available
+Device probe...
+lamebus0 (system main bus)
+emu0 at lamebus0
+ltrace0 at lamebus0
+ltimer0 at lamebus0
+beep0 at ltimer0
+rtclock0 at ltimer0
+lrandom0 at lamebus0
+random0 at lrandom0
+lhd0 at lamebus0
+lhd1 at lamebus0
+lser0 at lamebus0
+con0 at lser0
+
+cpu0: MIPS/161 (System/161 2.x) features 0x0
+OS/161 kernel [? for menu]: 
+
+Step 2:
+commit 9971d70d156c5247663affa4d467baddbdb4793c (HEAD -> master, tag: asst1-start, origin/master)
+Author: masonw19 <masonwong19@gmail.com>
+Date:   Thu Sep 8 16:21:07 2022 -0700
+
+    Adding README.md
+
+commit 684411e9943d0e2cd2083aede595b755b25fa839
+Author: Mason Wong <masonw19@ssh-linux3.ece.ubc.ca>
+Date:   Thu Sep 8 16:14:30 2022 -0700
+
+    Initial commit of os161 for CPEN331
+
+Step 3:
+asst1-start
+
+Question 1:
+The first line of code to be executed when a trap occurs can be found in ~/os161/src/kern/arch/mips/locore/exception-mips1.S.
+The line that is first executed is either line 69 or 87 depending on if the trap is for 
+the mips_utlb_handler or the mips_general_handler. In either case the first instruction jumps to the `common_excpetion` function. In the `common_exception` function
+we ensure that we are in kernel mode before handling the trap. This is done by checking checking the we-were-in-user-mode bit, 
+if the bit is clear then we were in kernel mode otherwise we were in user mode and we need to save the contents then load the kernel
+stack pointer. A `struct trap_frame` is then built and its address is passed as an argument to the `mips_trap` function which is located 
+in ~/os161/src/kern/arch/mips/locore/trap.c. `mips_trap` handles the event that has occured.
+The `mips_trap` will handle the a syscall event by calling the `syscall` function found in `~/os161/src/kern/arc/mips/syscall/syscall.c` and passing
+the trap_frame to it.
+If an interrupt has occured, `mips_trap` will handle this by calling `mainbus_interrupt` with the trap_frame argument, this function
+is found in `~/os161/src/kern/arch/sys161/dev/lamebus_machdep.c`
+
+Question 2:
+The code that invokes system calls from user programs can be found in `~/os161/src/userland/lib/libc/arch/mips/systemcalls-mips.S`.
+Specifically, it occurs on line 84 of that file which calls `syscall`.
+
+Question 3:
+The kernel likely needs access to the libc functions and therefore we have a separate copy of them in `common/` since the kernel 
+will have access to it.
+
+Question 4:
+Two things that `configure` will configure are:
+    1. OSTREE - this will specify where to install the compiled system in a directory tree, default location is `$HOME/os161/root`
+            Usage. `./configure --ostree=PATH`
+    2. DEBUG - this can be used to compile the user-level programs with debug info, this is disabled by default
+            Usage. `./confiugre --debug`
+
+Somethings that may invalidate the configuration and cause us to want to rerun it is if we would like to change the
+OSPATH or DEBUG configuration. Additoinally, if we were to run the system on a different hardware (Platform/Machine)
+then we would have to rerun it as well with different PLATFORM and MACHINE values in the `configure` file specified on 
+line 20 and 21.
+
+Question 5:
+All files that are specified in `~/os161/src/kern/arch/mips/conf/conf.arch` are machine dependent.
+Machine-dependent code will typically use details that are specific to the machine that is intended to be ran on. 
+These things can include endinaness, register addressing, machine specific types, memory handling instructions, and more. In our case, the details have been specified for MIPS, however if we were to try to run our code
+on an ARM or x86/64 processor it will not work correctly because the hardware details are likely different.
+
+It is important to separate machine dependent and non-machine dependent code for maintainability.
+Having these things separated will make it easier to port to a different machine in the future because you
+will already know which code will need to be modified to work on a different machine. 
+
+Question 6: 
+The size of the trapframe is 4 * 37 bytes = 148 bytes. It is 148 bytes because if we look in `~/os161/src/arch/mips/include/trapframe.h` 
+we see that the struct has 37 fields and each are of type uint32_t. uint32_t is likely used for each field becuase a register in MIPS is 4 bytes in size, 
+therefore one register can be used for each trapframe field.
+
+Question 7:
+We would want to re-run the `~/os161/src/kern/conf/config` file each time we would like to reconfigure the kernel.
+We would like to reconfigure the kernel if we would like to change its configuration, for example if we would like 
+to run it with debug information, or if we have changed any of the kernel code by modiyfing current files or adding
+new files.
+
+Question 8: 
+`bmake depend` should be executed after re-running the `~/os161/src/kern/conf/config` script.
+The command is used to make dependencies of C source files which is needed after reconfiguring the kernel.
+`bmake depend` should also be ran after changing `#include` statements in source files.
+
+Question 9: 
+`bmake` should be ran to compile the kernel after changes have been made
+`bmake install` is executed after you have compiled the kernel so that you can install it.
+
+Question 10: 
+You would have to add a new element in the `static const char *mainmenu[]` on line 516 in `~/os161/src/kern/main/menu.c`.
+An item like `"[hw] Prints 'Hello World' to console"` could be added to the array.
+Then a new item would be added to the `cmdtable` struct on line 542 of `~/os161/src/kern/main/menu.c`. 
+It would make sense to add the item under the `/* operations */` comment, and the item could be `{ "hw", cmd_hello },`
+After this, we can add a new function called `cmd_hello`. The function can look like the following:
+```
+/*
+ *	Command for printing Hello World.
+ */
+static
+int 
+cmd_hello(int nargs, char **args) 
+{
+	(void)nargs;
+	(void)args;
+
+	kprintf("Hello World!\n");
+	return 0;
+}
+```
+This function is also placed in `~/os161/src/kern/main/menu.c` and it can be placed near the top of the file
+where the functions are defined.
+Finally, we will reconfigure, recompile, reinstall the kernel.
+
+Question 11:
+OS161 is its own operating system which has separate hardware from my machine, it does not have access to my machines utilities so it must have its own
+for its own hardware architecture.
+
+Question 12:
+When a program returns, the return value is stored in register `s0`. When the program leaves `main`, the return 
+value will be stored in `v0`.
+
+Question 13: 
+    1. Add a syscall definition with a unique number as its identifier, this would be added in `~/os161/src/kern/include/kern/syscall.h`
+    2. Define the function prototype in `~/os161/src/kern/include/syscall.h` for the new syscall definition 
+    3. Write the function for the function prototype. A file with this function should be added to `~/os161/src/kern/syscall/` 
+    4. Add a new case to the switch statement on line 102 in `~/os161/src/kern/arch/mips/syscall/syscall.c` to handle the new syscall identifier
+       which will call the function you wrote in step 3
+
+    We would have created a new file for the syscall so we would have to run `./~/os161/src/kern/conf/config`. Following we would need to change
+    directories to `~/os161/src/kern/compile/DUMBVM/` and run `bmake depend && bmake && bmake install` to add dependencies, compile the kernel, 
+    and install the kernel.
+
+Question 14: 
+```
+__start () at ../../arch/sys161/main/start.S:54
+```
+From the above code we can determine that the first function that is called is `__start` in `~/os161/src/kern/arch/sys161/main/start.S`
+
+Question 15: 
+```
+54      addiu sp, sp, -24
+```
+The above is the first assembly instruction that is executed.
+
+Question 16:
+(gdb) info breakpoints
+Num     Type           Disp Enb Address    What
+1       breakpoint     keep y   0x800143a0 in showmenu at ../../main/menu.c:411
+2       breakpoint     keep y   0x800139ec in kmain at ../../main/main.c:213
+
+A breakpoint is set on line 411 of menu.c which is the beginning of the `menu.c:showmenu()` function.
+A breakpoint is set on line 213 of main.c which calls `menu.c:menu()`.
+
+Question 17:
+
+
+Question 18:
+The assembly instruction that calls kmain is found at start.S:215. The instruction is...
+```
+   jal kmain
+```
+
+Question 19:
+GDB output from stepping into main.c:boot() and stepping through to see the functions that are called.
+
+```
+211             boot();
+(gdb) s
+boot () at ../../main/main.c:99
+99              kprintf("\n");
+(gdb) n
+100             kprintf("OS/161 base system version %s\n", BASE_VERSION);
+(gdb) n
+101             kprintf("%s", harvard_copyright);
+(gdb) n
+102             kprintf("\n");
+(gdb) n
+104             kprintf("Put-your-group-name-here's system version %s (%s #%d)\n",
+(gdb) n
+106             kprintf("\n");
+(gdb) n
+109             ram_bootstrap();
+(gdb) n
+110             proc_bootstrap();
+(gdb) n
+111             thread_bootstrap();
+(gdb) n
+112             hardclock_bootstrap();
+(gdb) n
+113             vfs_bootstrap();
+(gdb) n
+114             kheap_nextgeneration();
+(gdb) n
+117             kprintf("Device probe...\n");
+(gdb) n
+118             KASSERT(curthread->t_curspl > 0);
+(gdb) n
+119             mainbus_bootstrap();
+(gdb) n
+120             KASSERT(curthread->t_curspl == 0);
+(gdb) n
+122             pseudoconfig();
+(gdb) n
+123             kprintf("\n");
+(gdb) n
+124             kheap_nextgeneration();
+(gdb) n
+127             vm_bootstrap();
+(gdb) n
+128             kprintf_bootstrap();
+(gdb) n
+129             thread_start_cpus();
+(gdb) n
+132             vfs_setbootfs("emu0");
+(gdb) n
+134             kheap_nextgeneration();
+(gdb) n
+141     }
+```
+
+Question 20:
+I printed bootcpu and got the address 0x80000. I then tried to print the contents of the address and 
+I was not able to access that memory location.
+(gdb) p bootcpu
+$1 = (struct cpu *) 0x80000
+(gdb) p *bootcpu
+Cannot access memory at address 0x80000
+
+Question 21:
+367             bootcpu = cpu_create(0);
+(gdb) n
+368             bootthread = bootcpu->c_curthread;
+(gdb) print *bootcpu
+$2 = {c_self = 0x8003af00, c_number = 0, c_hardware_number = 0, c_curthread = 0x8003bf80, c_zombies = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af1c, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af10, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_hardclocks = 0, c_spinlocks = 0, 
+  c_isidle = false, c_runqueue = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af44, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af38, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_runqueue_lock = {splk_lock = 0, splk_holder = 0x0}, c_ipi_pending = 0, c_shootdown = {{
+      ts_placeholder = 0} <repeats 16 times>}, c_numshootdown = 0, c_ipi_lock = {splk_lock = 0, splk_holder = 0x0}}
+
+Question 22:
+(gdb) print allcpus
+$1 = {arr = {v = 0x0, num = 0, max = 0}}
+
+Question 23:
+(gdb) print allcpus
+$2 = {arr = {v = 0x80039fe0, num = 1, max = 4}}
