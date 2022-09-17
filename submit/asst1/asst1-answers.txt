@@ -56,7 +56,7 @@ If an interrupt has occured, `mips_trap` will handle this by calling `mainbus_in
 is found in `~/os161/src/kern/arch/sys161/dev/lamebus_machdep.c`
 
 Question 2:
-The code that invokes system calls from user programs can be found in `~/os161/src/userland/lib/libc/arch/mips/systemcalls-mips.S`.
+The code that invokes system calls from user programs can be found in `~/os161/src/userland/lib/libc/arch/mips/syscalls-mips.S`.
 Specifically, it occurs on line 84 of that file which calls `syscall`.
 
 Question 3:
@@ -135,8 +135,10 @@ OS161 is its own operating system which has separate hardware from my machine, i
 for its own hardware architecture.
 
 Question 12:
-When a program returns, the return value is stored in register `s0`. When the program leaves `main`, the return 
-value will be stored in `v0`.
+When the `main` function of a program completes, the return value is stored in register `v0`.
+This value is then stored in register `s0` (callee-save register) so that we will still have 
+the value in the case that `exit()` returns. This informaiton can be found in `~/os161/src/userland/lib/crt0/mips/crt0.S`
+around line 85.
 
 Question 13: 
     1. Add a syscall definition with a unique number as its identifier, this would be added in `~/os161/src/kern/include/kern/syscall.h`
