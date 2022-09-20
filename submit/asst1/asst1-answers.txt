@@ -1,0 +1,184 @@
+Assignment #1
+
+(Step 4)
+
+sys161: System/161 release 2.0.3, compiled Aug 10 2015 13:31:07
+
+OS/161 base system version 1.99.08
+Copyright (c) 2000, 2001-2005, 2008-2011, 2013, 2014
+   President and Fellows of Harvard College.  All rights reserved.
+
+Put-your-group-name-here's system version 0 (DUMBVM #2)
+
+292k physical memory available
+Device probe...
+lamebus0 (system main bus)
+emu0 at lamebus0
+ltrace0 at lamebus0
+ltimer0 at lamebus0
+beep0 at ltimer0
+rtclock0 at ltimer0
+lrandom0 at lamebus0
+random0 at lrandom0
+lhd0 at lamebus0
+lhd1 at lamebus0
+lser0 at lamebus0
+con0 at lser0
+
+cpu0: MIPS/161 (System/161 2.x) features 0x0
+OS/161 kernel [? for menu]: 
+
+
+Git Log:
+kkolla@ssh-linux3:~/os161/src$ git log 
+commit 63fb9d74575b7f6a944d41b460dfe361dd098ace (HEAD -> master, tag: asst1-start, origin/master)
+Author: kkolla06 <kolla.kaushik123@gmail.com>
+Date:   Tue Sep 13 13:44:11 2022 -0700
+
+    Initial commit of os161 for CPEN331
+
+
+Git Tag:
+kkolla@ssh-linux3:~/os161/src$ git tag
+asst1-start
+
+
+(Step 5)
+Q1. The first line of code executed when a trap occurs can be found in the file ‘kern/arch/mips/locore/exception-mips1.S’; Depending on the exception, either line 69: ‘j common_exception’ in ‘mips_utlb_handler’ is executed for an UTLB exception or line 87: ‘j common_exception’ in ‘mips_general_handler’ is executed for a common exception.
+
+‘common_exception’ starting on line 104 then transfers control to the method ‘mips_trap’  which can be found in file ‘kern/arch/mips/locore/trap.c’.
+
+An interrupt is treated just like a trap and there is no difference in code execution.
+
+Q2. The ‘syscall’ on line 84 in ‘__syscall’ in the file ‘userland/lib/libc/arch/mips/syscalls-mips.S’ invokes system calls from user programs and causes traps.
+
+Q3. Libc functions in ‘common/libc’ are shared by the kernel and the user while the libc functions in ‘userland/lib/libc’ can only be executed by the user. The user can modify files in ‘userland/lib/libc’ and the kernel would not be affected by these changes as it has its own copy of these files. This duplicate code base added additional security and allow the user to make any changes they want without disrupting the entire system. 
+
+Q4. ‘configure’ configures makefile definitions and the build tree. You will need to rerun it when you use a different machine or operating system. 
+
+Q5. A number of details can make a function “machine-dependent” based on the hardware of the machine such as number of registers, word endianness, etc. It is very important to maintain this separation as we can abstract all hardware details and the rest of the code would not be machine-dependent. This allows the user to recompile a portion of the code instead of the entire kernel when switching machines. 
+
+Q6. The struct ‘trapframe’ in file ‘kern/arch/mips/include/trapframe.h’ has 37 uint32_t registers, thus the trapframe is 37*4 = 148 bytes big. It’s big size allows it to pass all required information to an exception handler. 
+
+Q7. The ‘kern/conf/config’ script should be rerun when the kernel config is changed, new source code files are added or when source code is added or modified. 
+
+Q8. ‘bmake depend’ should run after you run the DUMBVM config script or when the header files are modified. 
+
+Q9. ‘bmake’ or ‘bmake install’ should run after running ‘bmake depend’ when changes to the source code have been made. ‘bmake’ compiles the code and ‘bmake install’ puts the code in the correct folder within the directory. 
+
+Q10. To add a command that prints “Hello world!”, we need to make a function that implements the command and then add an entry to the ‘cmdtable’ array in the file ‘kern/main/menu.c’.
+
+Q11. I am running os161 on a Virtual Machine which is running on my machine. The program cannot access the standard utilities outside of the Virtual Machine thus we need to include these in our OS/161 distribution. 
+
+Q12. The file ‘userland/lib/crt0/mips/crt0.S’ shows that when a user program exits, the program’s return value is saved in register s0 and register a0 as an argument to exit. 
+
+Q13. 
+
+
+(Step 7)
+
+(gdb) target remote unix:.sockets/gdb
+Remote debugging using unix:.sockets/gdb
+__start () at ../../arch/sys161/main/start.S:54
+54	   addiu sp, sp, -24
+
+Q14. As seen above, the very first function executed is ‘_ _start()’ in file ‘/arch/sys161/main/start.S’.
+
+Q15. As seen above, the very first assembly instruction executed is ‘addiu sp, sp, -24’ which is line 54 of file ‘/arch/sys161/main/start.S’.
+
+Q16. 
+Num     Type           Disp Enb Address    What
+1       breakpoint     keep y   0x800139e4 in kmain at ../../main/main.c:211
+2       breakpoint     keep y   0x800143a0 in showmenu at ../../main/menu.c:415
+
+Q17. Between the beginning of the execution and the invocation of the kernel main function the following occur: 
+stack frame is set up 
+kernel is loaded 
+exception handler code is added to the first page of memory 
+instruction cache is flushed 
+TLB is initialized 
+status registers are set up
+
+Q18. Line 215: ‘jal kmain’ in file ‘kern/arch/sys161/main/start.S’ calls the kernel main function
+
+Q19. 
+Breakpoint 1, boot () at ../../main/main.c:99
+99		kprintf("\n");
+(gdb) n
+100		kprintf("OS/161 base system version %s\n", BASE_VERSION);
+(gdb) 
+101		kprintf("%s", harvard_copyright);
+(gdb) 
+102		kprintf("\n");
+(gdb) 
+104		kprintf("Put-your-group-name-here's system version %s (%s #%d)\n",
+(gdb) 
+106		kprintf("\n");
+(gdb) 
+109		ram_bootstrap();
+(gdb) 
+110		proc_bootstrap();
+(gdb) 
+111		thread_bootstrap();
+(gdb) 
+112		hardclock_bootstrap();
+(gdb) 
+113		vfs_bootstrap();
+(gdb) 
+114		kheap_nextgeneration();
+(gdb) 
+117		kprintf("Device probe...\n");
+(gdb) 
+118		KASSERT(curthread->t_curspl > 0);
+(gdb) 
+119		mainbus_bootstrap();
+(gdb) 
+120		KASSERT(curthread->t_curspl == 0);
+(gdb) 
+122		pseudoconfig();
+(gdb) 
+123		kprintf("\n");
+(gdb) 
+124		kheap_nextgeneration();
+(gdb) 
+127		vm_bootstrap();
+(gdb) 
+128		kprintf_bootstrap();
+(gdb) 
+129		thread_start_cpus();
+(gdb) 
+132		vfs_setbootfs("emu0");
+(gdb) 
+134		kheap_nextgeneration();
+
+Q20. 
+Breakpoint 1, thread_bootstrap () at ../../thread/thread.c:357
+357		cpuarray_init(&allcpus);
+(gdb) p *bootcpu
+Cannot access memory at address 0x80000
+
+Q21. 
+367		bootcpu = cpu_create(0);
+(gdb) n
+368		bootthread = bootcpu->c_curthread;
+(gdb) p *bootcpu
+$1 = {c_self = 0x8003af00, c_number = 0, c_hardware_number = 0, 
+  c_curthread = 0x8003bf80, c_zombies = {tl_head = {tln_prev = 0x0, 
+      tln_next = 0x8003af1c, tln_self = 0x0}, tl_tail = {
+      tln_prev = 0x8003af10, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, 
+  c_hardclocks = 0, c_spinlocks = 0, c_isidle = false, c_runqueue = {
+    tl_head = {tln_prev = 0x0, tln_next = 0x8003af44, tln_self = 0x0}, 
+    tl_tail = {tln_prev = 0x8003af38, tln_next = 0x0, tln_self = 0x0}, 
+    tl_count = 0}, c_runqueue_lock = {splk_lock = 0, splk_holder = 0x0}, 
+  c_ipi_pending = 0, c_shootdown = {{ts_placeholder = 0} <repeats 16 times>}, 
+  c_numshootdown = 0, c_ipi_lock = {splk_lock = 0, splk_holder = 0x0}}
+
+Q22. 
+(gdb) cpuarray allcpus
+0 cpus
+
+Q23. 
+(gdb) cpuarray allcpus 
+1 cpus 
+cpu 0: 
+$1 = {c_self = 0x8003af00, c_number = 0, c_hardware_number = 0, c_curthread = 0x8003bf80, c_zombies = {tl_head = {tln_prev = 0x0, tl\ n_next = 0x8003af1c, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af10, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_hardclocks\  = 1, c_spinlocks = 0, c_isidle = false, c_runqueue = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af44, tln_self = 0x0}, tl_tail = \ {tln_prev = 0x8003af38, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_runqueue_lock = {splk_lock = 0, splk_holder = 0x0}, c_ipi_\ pending = 0, c_shootdown = {{ts_placeholder = 0} <repeats 16 times>}, c_numshootdown = 0, c_ipi_lock = {splk_lock = 0, splk_holder =\  0x0}}
