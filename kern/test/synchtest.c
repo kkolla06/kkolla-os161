@@ -34,6 +34,7 @@
 #include <types.h>
 #include <lib.h>
 #include <clock.h>
+#include <current.h>
 #include <thread.h>
 #include <synch.h>
 #include <test.h>
@@ -158,6 +159,7 @@ locktestthread(void *junk, unsigned long num)
 
 	for (i=0; i<NLOCKLOOPS; i++) {
 		lock_acquire(testlock);
+		//kprintf("round: %d\n", i);
 		testval1 = num;
 		testval2 = num*num;
 		testval3 = num%3;
@@ -216,6 +218,55 @@ locktest(int nargs, char **args)
 	}
 
 	kprintf("Lock test done.\n");
+
+	return 0;
+}
+
+int 
+lockunittest(int nargs, char **args) 
+{
+	(void)nargs;
+	(void)args;
+
+	char *lk_name = kstrdup("lk_unit_test");
+
+	kprintf("Starting lock_create test...\n");
+	testlock = lock_create("lk_unit_test");
+
+	KASSERT(strcmp(testlock->lk_name, lk_name) == 0);
+
+	KASSERT(testlock->lk_holder == NULL);
+
+	KASSERT(&(testlock->lk_splk) != NULL);
+	kprintf("Done lock_create unit test.\n");
+
+	kprintf("Starting lock_acquire test...\n");
+	lock_acquire(testlock);
+
+	KASSERT(testlock->lk_holder == curthread);
+
+	kprintf("Done lock_acquire unit test...\n");
+
+	kprintf("Starting lock_do_i_hold returns true test...\n");
+
+	KASSERT(lock_do_i_hold(testlock) == true);
+
+	kprintf("Done lock_do_i_hold returns true test.\n");
+
+	kprintf("Starting lock_release test...\n");
+	lock_release(testlock);
+
+	KASSERT(testlock->lk_holder == NULL);
+
+	kprintf("Done lock_release test.\n");
+
+	kprintf("Starting lock_do_i_hold returns false test...\n");
+
+	KASSERT(lock_do_i_hold(testlock) == false);
+
+	kprintf("Done lock_do_i_hold returns false test.\n");
+
+	lock_destroy(testlock);
 
 	return 0;
 }

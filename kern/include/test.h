@@ -53,6 +53,8 @@ int semtest(int, char **);
 int locktest(int, char **);
 int cvtest(int, char **);
 int cvtest2(int, char **);
+/* thread unit tests */
+int lockunittest(int, char **);
 
 /* filesystem tests */
 int fstest(int, char **);

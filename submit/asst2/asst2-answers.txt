@@ -1,0 +1,70 @@
+##############
+##  Step 2. ## 
+##############
+
+1. What happens to a thread when it exits (i.e., calls thread_exit())? What about when it sleeps?
+
+When a thread exits we remove the thread from its process and turn off interrupts, this is done by calling 
+`proc_remthread()`. After detaching the thread, we call `thread_checkstack` to ensure that the thread stack 
+is not overflowed and that the thread has been correctly attached. After this we then add the thread to the a 
+list of exited threads for the cpu by calling `thread_state()` and passing a newstate of S_ZOMBIE. The next thread
+for the CPU is then acquired and we switch to that thread. Once we have switched threads, we cleanup the resources for
+the thread we had just exited by calling `exorcise` on line 722 in kern/thread/thread.C
+When a thread sleeps, `thread_switch()` in kern/thread/thread.c is called and the thread
+is added to the list in the wait channel. This thread can then be woken up when `wchan_wakeone()`
+is called on line 1045 of `kern/thread/thread.c`.
+
+2. What function(s) handle(s) a context switch?
+A context switch is done by the `switchframe_switch` function that is defined in 
+kern/arch/mips/thread/switch.S` on line 42. This function is supported by `thread_switch()`
+which handles higher level jobs that are required before and after switching to a new context.
+`thread_switch()` is found on line 560 in kern/thread/thread.c
+
+3. What does it mean for a thread to be in each possible state?
+There are 4 possible thread states:
+    S_RUN: this means that the thread is currently running
+    S_READY: this means that the thread is ready to run
+    S_SLEEP: this means that the thread is sleeping
+    S_ZOMBIE: this means the thread has exited but not yet deleted
+
+4. What does it mean to turn interrupts off? How is this accomplished? Why is it important to turn off interrupts in the thread subsystem code?
+When you turn off interrupts it means that the current thread cannot be interrupted by another thread until the interrupts are re-enabled.
+Interrupts are turned off by calling the `splhigh()` function in kern/include/spl.h on line 103 which sets the highest priority for the thread 
+and therefore it cannot be interrupted.
+It is important to turn off interrupts in the thread subsystem code so that specific thread operations can happen without interruption. These 
+operations could be detaching a thread or completing a context switch.
+
+5. What happens when a thread wakes up another thread? How does a sleeping thread get to run again?
+When a thread wakes up another thread the current thread will call the function `V()` on line 124 in kern/thread/sync.c.
+This function will increment the semaphore count and then call `wchan_wakeone()` which will wake up a sleeping thread, `wchan_wakeone()` 
+can be found on line 1045 in kern/thread/thread.c. In `wchan_wakeone()` we remove the head thread from the wc_threads list 
+of sleeping threads. We then make this thread runnable again by calling `thread_make_runnable()` and passing the thread which was 
+returned from the wc_threads list. `thread_make_runnable()` is found on line 450 in kern/thread/thread.c. The thread's state is then set
+to S_READY and the thread will be added to the c_runqueue list for the target cpu, this is the list where runnable threads reside for the cpu.
+When there is a context switch the next thread to run is taken from the c_runqueue so it will be possible for the previously sleeping thread 
+to begin running.
+
+6. What function(s) choose(s) the next thread to run?
+The `thread_switch()` function chooses the next thread to run from the cpu's c_runqueue.
+The `schedule()` function is responsible for periodically reshuffling the CPU's c_runqueue list.
+
+7. How does it (do they) pick the next thread?
+This choice is made on line 642 in kern/thread/thread.c in the `thread_switch()` function and the thread that is chosen will be the thread which
+is the head of the current cpus c_runqueue.
+The `schedule()` function will be responsible for periodically reshuffling the list based on the priority of the threads
+
+8. What role does the hardware timer play in scheduling? What hardware independent function is called on a timer interrupt?
+The hardware timer plays a significant role in scheduling as it periodically calls the following two functions:
+    *   The `thread_consider_migration()` function is used to migrate threads to another CPU if the current
+        CPU is busy and other CPUs are idle or less busy. This function is found on line 846 in kern/thread/thread.c.
+    *   The `schedule()` function reshuffles the current CPU's run queue by job priority. This function is found on 
+        line 820 in kern/thread/thread.c.
+    *   `thread_yield()` function (line 805 in kern/thread/thread.c) which calls the `thread_switch()` function to begin running a different thread on the CPU.
+
+9. Describe how wchan_sleep() and wchan_wakeone() are used to implement semaphores.
+wchan_sleep() and wchan_wakeone() are used to implement semaphore 
+
+10. How does the implementation of wchan ensure that a thread never misses a wakeup signal: that another thread cannot attempt to awaken the first thread just as it is preparing to sleep, but before it is actually placed into the sleep queue?
+A wchan is protected by an associated, passed-in spinlock. When a thread is in the process of going to sleep it must hold a lock and when a thread is in the process of waking up
+a thread it must hold the same lock. The two threads cannot be holding the same lock at the same time and therefore the implementatino of wchan never misses
+a wakeup signal.

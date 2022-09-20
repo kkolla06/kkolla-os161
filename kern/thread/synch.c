@@ -138,6 +138,9 @@ V(struct semaphore *sem)
 //
 // Lock.
 
+/*
+ * Create a lock.
+ */
 struct lock *
 lock_create(const char *name)
 {
@@ -153,47 +156,88 @@ lock_create(const char *name)
                 kfree(lock);
                 return NULL;
         }
-
+	
         // add stuff here as needed
+        lock->lk_wc = wchan_create(lock->lk_name);
+	if (lock->lk_wc == NULL) {
+		kfree(lock->lk_name);
+		kfree(lock);
+		return NULL;
+	}
+
+        spinlock_init(&(lock->lk_splk));
+        
+        lock->lk_holder = NULL;
 
         return lock;
 }
 
+/*
+ * Destroy the lock.
+ */
 void
 lock_destroy(struct lock *lock)
 {
         KASSERT(lock != NULL);
 
         // add stuff here as needed
-
+        // We shouldn't destroy the lock if a thread is holding it.
+        KASSERT(lock->lk_holder == NULL);
+	
+        spinlock_cleanup(&(lock->lk_splk));
+	wchan_destroy(lock->lk_wc);
         kfree(lock->lk_name);
         kfree(lock);
 }
 
+/*
+ * Acquire the lock.
+ */
 void
 lock_acquire(struct lock *lock)
 {
         // Write this
+        spinlock_acquire(&(lock->lk_splk));
 
-        (void)lock;  // suppress warning until code gets written
+        while (lock->lk_holder != NULL) {
+                // Put the thread to sleep if the lock is in use.
+                wchan_sleep(lock->lk_wc, &(lock->lk_splk));          
+        }
+        KASSERT(lock->lk_holder == NULL);
+        // Acquire the lock by setting lk_holder to be the current thread.
+        lock->lk_holder = curthread;
+        spinlock_release(&(lock->lk_splk));
 }
 
+/*
+ *  Release the lock.
+ */
 void
 lock_release(struct lock *lock)
 {
         // Write this
+        // Raise an assertion if you cur thread is not the lock holder.
+	KASSERT(lock_do_i_hold(lock));
+        
+        spinlock_acquire(&(lock->lk_splk));
+        
+        // set the lock holder to NULL so the lock is free.
+        lock->lk_holder = NULL;
+        // wake a thread that is waiting for this resource.
+        wchan_wakeone(lock->lk_wc, &(lock->lk_splk));
 
-        (void)lock;  // suppress warning until code gets written
+        spinlock_release(&(lock->lk_splk));
 }
 
+/*
+ * Check if the current thread holds the lock.
+ */
 bool
 lock_do_i_hold(struct lock *lock)
 {
         // Write this
-
-        (void)lock;  // suppress warning until code gets written
-
-        return true; // dummy until code gets written
+        // return true if the lock holder is the current thread.
+        return (lock->lk_holder == curthread); 
 }
 
 ////////////////////////////////////////////////////////////
