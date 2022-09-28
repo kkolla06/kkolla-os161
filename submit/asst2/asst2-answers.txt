@@ -1,6 +1,6 @@
-##############
-##  Step 2. ## 
-##############
+####################
+##  Code Readings ## 
+####################
 
 1. What happens to a thread when it exits (i.e., calls thread_exit())? What about when it sleeps?
 
@@ -62,9 +62,13 @@ The hardware timer plays a significant role in scheduling as it periodically cal
     *   `thread_yield()` function (line 805 in kern/thread/thread.c) which calls the `thread_switch()` function to begin running a different thread on the CPU.
 
 9. Describe how wchan_sleep() and wchan_wakeone() are used to implement semaphores.
-wchan_sleep() and wchan_wakeone() are used to implement semaphore 
+When a thread tries to decrement the semaphore but the semaphore value is already 0, the thread uses wchan_sleep to sleep and wait for the semaphore count to be greater than 0.
+When a thread is finished with the semaphore it will increment the count for the semaphore then uses wchan_wakeone to wake up a sleeping thread that is waiting for 
+the semaphore. The thread that was previously put to sleep because the semaphore count == 0 will wake up and acauire the semaphore and decrecement the semaphore count.
 
 10. How does the implementation of wchan ensure that a thread never misses a wakeup signal: that another thread cannot attempt to awaken the first thread just as it is preparing to sleep, but before it is actually placed into the sleep queue?
-A wchan is protected by an associated, passed-in spinlock. When a thread is in the process of going to sleep it must hold a lock and when a thread is in the process of waking up
-a thread it must hold the same lock. The two threads cannot be holding the same lock at the same time and therefore the implementatino of wchan never misses
-a wakeup signal.
+The problem is solved by putting the thread onto the queue for the wait channel before the thread releases the spinlock.
+When wchan_sleep is called we pass a wait channel and the spinlock. This function then calls the thread_switch function while passing the S_SLEEP, the wait channel, and the spinlock. Then in thread_switch it will put the current thread onto the sleep queue for the wait channel then release the spinlock.
+On line 614 of src/kern/thread/thread.c the thread is put onto the queue for the wait channel, then on line 615 of src/kern/thread/thread.c the thread releases the spinlock. This solves the issue described in the question.
+
+ 
