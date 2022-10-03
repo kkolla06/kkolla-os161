@@ -73,7 +73,15 @@ Q11. I am running os161 on a Virtual Machine which is running on my machine. The
 Q12. The file ‘userland/lib/crt0/mips/crt0.S’ shows that when a user program exits, the program’s return value is saved in register s0 and register a0 as an argument to exit. 
 
 Q13. 
-
+Modify:
+   Add the syscall in 'kern/include/kern/syscall.h'
+   Add the function prototype in 'kern/include/syscall.h'
+   Add the function implementation in 'kern/syscall.h'
+   Update the switch case statement in 'kern/arch/mips/syscall/syscall.c' to include the new syscall
+Next: 
+   run 'bmake' to compile the updated code
+   run 'bmake install' to put the code in the correct directory
+   
 
 (Step 7)
 
@@ -87,17 +95,17 @@ Q14. As seen above, the very first function executed is ‘_ _start()’ in file
 Q15. As seen above, the very first assembly instruction executed is ‘addiu sp, sp, -24’ which is line 54 of file ‘/arch/sys161/main/start.S’.
 
 Q16. 
-Num     Type           Disp Enb Address    What
-1       breakpoint     keep y   0x800139e4 in kmain at ../../main/main.c:211
-2       breakpoint     keep y   0x800143a0 in showmenu at ../../main/menu.c:415
+   Num     Type           Disp Enb Address    What
+   1       breakpoint     keep y   0x800139e4 in kmain at ../../main/main.c:211
+   2       breakpoint     keep y   0x800143a0 in showmenu at ../../main/menu.c:415
 
 Q17. Between the beginning of the execution and the invocation of the kernel main function the following occur: 
-stack frame is set up 
-kernel is loaded 
-exception handler code is added to the first page of memory 
-instruction cache is flushed 
-TLB is initialized 
-status registers are set up
+   - stack frame is set up 
+   - kernel is loaded 
+   - exception handler code is added to the first page of memory 
+   - instruction cache is flushed 
+   - TLB is initialized 
+   - status registers are set up
 
 Q18. Line 215: ‘jal kmain’ in file ‘kern/arch/sys161/main/start.S’ calls the kernel main function
 
