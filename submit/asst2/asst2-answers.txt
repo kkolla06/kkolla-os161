@@ -1,0 +1,39 @@
+Assignment #2
+
+Name: Kaushik Kolla
+Student #: 74167503
+
+1. The function 'thread_exit()' in file 'kern/thread/thread.c' is called to cause the current thread to exit. The thread is detached from our process and after 
+checking the stack guard band, interrupts are turned off and the thread is put in the S_ZOMBIE state. When a thread sleeps, it is added to the wait channel 
+queue and the thread is put in the S_SLEEP state. The threads sleeps until 'wchan_wakeone()' or 'wchan_wakeall()' are called.
+
+2. The function 'thread_switch()' in file 'kern/thread/thread.c' handles high level, machine-independent context switches. 
+This function then calls 'switchframe_switch()' in file 'kern/arch/mips/thread/switch.S' which contains assembly language context switch code.
+
+3. There are 4 possible thread states:
+    S_RUN: The thread is currently running
+    S_READY: The thread is ready to run but is not running yet 
+    S_SLEEP: The thread is queued in the wait channel, waiting on a resource
+    S_ZOMBIE: The thread has completed running and has exited but has not yet been cleaned up
+
+4. Turning interrupts off prevents the CPU from switching between threads when a particular thread is running. This is achieved by calling 'splhigh()' 
+found in file 'kern/thread/thread.c'. It is important to turn off interrupts in the thread subsystem code as interrupts can impede context switching 
+and can result in the CPU preventing a thread from running, sleeping, exiting, etc, or can even break a thread mid-execution. 
+ 
+5. When a thread wakes up another thread, the thread is placed in the run queue and the run queue is locked. The function 'thread_make_runnable()' in file 
+'kern/thread/thread.c' is then called which unlocks the queue and runs the first thread. A sleeping thread can be woken up when a thread calls the function 
+'wchan_wakeone()' or 'wchan_wakeall()' in file 'kern/thread/thread.c' which in turn also call 'thread_make_runnable()' to run it. 
+
+6. The function 'threadlist_remhead()' in file 'kern/thread/threadlist.c' chooses the next thread to run. 
+
+7. 'threadlist_remhead()' picks the next thread by checking for the first thread in the run queue (&curcpu->c_runqueue).
+
+8. The hardware timer periodically calls the function 'schedule()' which reshuffles the current CPU's run queue by job priority. The hardware independent 
+function 'hardclock()' is called on a timer interrupt which in turn calls 'thread_consider_migration()', 'schedule()' and finally 'thread_yield()'.
+
+9. The semaphore function 'P()' in file 'kern/thread/synch.c' calls 'wchan_sleep()' while the semaphore count is equal to 0. The function 'V()' in the same 
+file increments count and calls 'wchan_wakeone()' after ensuring that count is greater than 0. 
+
+10. The 'wcahn_sleep()' implementation in file 'kern/thread/thread.c' ensures that it holds a spinlock before calling 'thread_switch()'. This prevents any 
+other thread from accessing the wait channel while a thread is being added to the wait channel as the spinlock is only released after the thread is added. 
+This in turn prevents a thread from being woken up before being added to the wait channel queue. 
