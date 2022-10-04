@@ -2,3 +2,5 @@ cscope*
 build/*
 defs.mk
 kern/compile/*
+userland/*
+.vscode/
