@@ -133,8 +133,11 @@ dandelion(void *p, unsigned long arg)
 			kprintf("Dandelion severed rope %d\n", hook);
 			lock_release(kprintf_lk);
 		}
+		else {
+			lock_release(ropes[hook]->lk);
+			continue; // don't yield if rope was severed.
+		}
 		lock_release(ropes[hook]->lk);
-
 		thread_yield();
 	}
 
@@ -169,7 +172,12 @@ marigold(void *p, unsigned long arg)
 			lock_acquire(kprintf_lk);
 			kprintf("Marigold severed rope %d from stake %d\n", rope->rope_num, stake);
 			lock_release(kprintf_lk);
-		} 
+		}
+		else {
+			lock_release(rope->lk);
+			lock_release(stakes[stake]->lk);
+			continue; // don't yield if rope was severed.
+		}
 		lock_release(rope->lk);
 		lock_release(stakes[stake]->lk);
 		thread_yield();
@@ -188,15 +196,15 @@ flowerkiller(void *p, unsigned long arg)
 {
 	(void)p;
 	(void)arg;
-	struct rope *rope1;
-	struct rope *rope2;	
+	struct rope *rope1, *rope2;
+	int stake_num1, stake_num2;	
 
 	kprintf("Lord FlowerKiller thread starting\n");
 
 	/* Implement this function */
 	while (ropes_left > 1) {
-		int stake_num1 = random() % NROPES;
-		int stake_num2 = random() % NROPES;
+		stake_num1 = random() % NROPES;
+		stake_num2 = random() % NROPES;
 
 		lock_acquire(flower_killer_lk);
 		lock_acquire(stakes[stake_num1]->lk);
@@ -209,6 +217,17 @@ flowerkiller(void *p, unsigned long arg)
 			lock_acquire(rope2->lk);
 		}
 		lock_release(flower_killer_lk);
+
+		// if the ropes are severed already we cannot swap them. Release locks.
+		if (rope1->severed || rope2->severed) {
+			if (stake_num1 != stake_num2) {
+				lock_release(rope2->lk);
+				lock_release(stakes[stake_num2]->lk);
+			}
+			lock_release(rope1->lk);
+			lock_release(stakes[stake_num1]->lk);
+			continue;
+		}
 
 		// swap the ropes for the two stakes
 		stakes[stake_num1]->rope_num = rope2->rope_num;
