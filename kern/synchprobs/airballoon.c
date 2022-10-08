@@ -6,17 +6,69 @@
 #include <thread.h>
 #include <test.h>
 
+#include <synch.h>
+
 #define N_LORD_FLOWERKILLER 8
 #define NROPES 16
 static int ropes_left = NROPES;
 
 /* Data structures for rope mappings */
 
+// functions to create & destroy ropes
+struct rope *create_rope (const char *name, int num);
+void destroy_rope (struct rope* rope);
+
 /* Implement this! */
+struct rope {
+	int rope_num;			// TODO: needed?
+	volatile bool severed;
+	struct lock *rope_lk;
+};
+
+struct rope *create_rope(const char *name, int num) {
+	struct rope *rope;
+    rope = kmalloc(sizeof(struct rope));
+    if (rope == NULL) {
+        return NULL;
+    }
+
+	rope->rope_num = num;
+	rope->severed = false;
+	rope->rope_lk = lock_create(name);
+	
+	return rope;
+}
+
+void destroy_rope(struct rope* rope)
+{
+    KASSERT(rope != NULL);
+	lock_destroy(rope->rope_lk);
+    kfree(rope);
+}
+
+struct rope* ropes[NROPES]; // array of ropes
+int stakes[NROPES];	// array of stakes: indicates which rope is attached to which stake 
+
+
 
 /* Synchronization primitives */
+struct lock *ropes_left_lk;
+struct lock *thread_lk;
+struct cv *thread_cv;
 
 /* Implement this! */
+
+static void setup() {
+
+	ropes_left_lk = lock_create("ropes_left");
+	thread_lk = lock_create("thread_lk");
+	thread_cv = cv_create("thread_cv");
+	
+	for (int i = 0; i < NROPES; i++) {
+		ropes[i] = create_rope("rope", i);
+		stakes[i] = i;
+	}
+}
 
 /*
  * Describe your design and any invariants or locking protocols
@@ -34,6 +86,33 @@ dandelion(void *p, unsigned long arg)
 	kprintf("Dandelion thread starting\n");
 
 	/* Implement this function */
+
+	// since hooks cannot change, we directly check if the random rope is severed.
+	while (ropes_left > 0) {
+		int rope = random() % NROPES;
+
+		if(!ropes[rope]->severed) {
+			lock_acquire(ropes[rope]->rope_lk);
+
+			if(!ropes[rope]->severed) {
+				ropes[rope]->severed = true;
+				kprintf("Dandelion severed rope %d\n", ropes[rope]->rope_num);
+
+				lock_acquire(ropes_left_lk);
+				ropes_left--;
+				lock_release(ropes_left_lk);
+
+				lock_release(ropes[rope]->rope_lk);
+				thread_yield();
+			} else {
+				lock_release(ropes[rope]->rope_lk);
+			}
+		}
+	}
+
+	lock_acquire(thread_lk);
+	cv_signal(thread_cv, thread_lk);
+	lock_release(thread_lk);
 }
 
 static
@@ -79,10 +158,13 @@ airballoon(int nargs, char **args)
 {
 
 	int err = 0, i;
+	// int err = 0;
 
 	(void)nargs;
 	(void)args;
 	(void)ropes_left;
+
+	setup();
 
 	err = thread_fork("Marigold Thread",
 			  NULL, marigold, NULL, 0);
