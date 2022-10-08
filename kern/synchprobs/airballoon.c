@@ -206,24 +206,23 @@ flowerkiller(void *p, unsigned long arg)
 		stake_num1 = random() % NROPES;
 		stake_num2 = random() % NROPES;
 
+		if (stake_num1 == stake_num2) {
+			continue; // We cannot pick same stake twice according to @345 on piazza.
+		}
+
 		lock_acquire(flower_killer_lk);
 		lock_acquire(stakes[stake_num1]->lk);
 		rope1 = ropes[stakes[stake_num1]->rope_num];
-		rope2 = rope1; // set to rope1 jic stake_num1 == stake_num2
 		lock_acquire(rope1->lk);
-		if (stake_num1 != stake_num2) {
-			lock_acquire(stakes[stake_num2]->lk);
-			rope2 = ropes[stakes[stake_num2]->rope_num];
-			lock_acquire(rope2->lk);
-		}
+		lock_acquire(stakes[stake_num2]->lk);
+		rope2 = ropes[stakes[stake_num2]->rope_num];
+		lock_acquire(rope2->lk);
 		lock_release(flower_killer_lk);
 
 		// if the ropes are severed already we cannot swap them. Release locks.
 		if (rope1->severed || rope2->severed) {
-			if (stake_num1 != stake_num2) {
-				lock_release(rope2->lk);
-				lock_release(stakes[stake_num2]->lk);
-			}
+			lock_release(rope2->lk);
+			lock_release(stakes[stake_num2]->lk);
 			lock_release(rope1->lk);
 			lock_release(stakes[stake_num1]->lk);
 			continue;
@@ -237,10 +236,9 @@ flowerkiller(void *p, unsigned long arg)
 		kprintf("Lord FlowerKiller switched rope %d from stake %d to stake %d\n", rope1->rope_num, stake_num1, stake_num2);
 		kprintf("Lord FlowerKiller switched rope %d from stake %d to stake %d\n", rope2->rope_num, stake_num2, stake_num1);
 		lock_release(kprintf_lk);
-		if (stake_num1 != stake_num2) {
-			lock_release(rope2->lk);
-			lock_release(stakes[stake_num2]->lk);
-		}
+		
+		lock_release(rope2->lk);
+		lock_release(stakes[stake_num2]->lk);
 		lock_release(rope1->lk);
 		lock_release(stakes[stake_num1]->lk);
 
