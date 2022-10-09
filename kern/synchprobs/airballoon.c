@@ -15,8 +15,6 @@ static int ropes_left = NROPES;
 /* Data structures for rope mappings */
 
 // functions to create & destroy ropes
-struct rope *create_rope (const char *name, int num);
-void destroy_rope (struct rope* rope);
 
 /* Implement this! */
 struct rope {
@@ -24,6 +22,9 @@ struct rope {
 	volatile bool severed;
 	struct lock *rope_lk;
 };
+
+struct rope *create_rope (const char *name, int num);
+void destroy_rope (struct rope* rope);
 
 struct rope *create_rope(const char *name, int num) {
 	struct rope *rope;
@@ -38,7 +39,6 @@ struct rope *create_rope(const char *name, int num) {
 	
 	return rope;
 }
-
 void destroy_rope(struct rope* rope)
 {
     KASSERT(rope != NULL);
@@ -55,6 +55,7 @@ int stakes[NROPES];	// array of stakes: indicates which rope is attached to whic
 struct lock *ropes_left_lk;
 struct lock *thread_lk;
 struct cv *thread_cv;
+struct lock *stakes_lk;
 
 /* Implement this! */
 
@@ -63,11 +64,28 @@ static void setup() {
 	ropes_left_lk = lock_create("ropes_left");
 	thread_lk = lock_create("thread_lk");
 	thread_cv = cv_create("thread_cv");
+	stakes_lk = lock_create("stakes_lk");
 	
 	for (int i = 0; i < NROPES; i++) {
 		ropes[i] = create_rope("rope", i);
 		stakes[i] = i;
 	}
+}
+
+static void clean_up() {
+	for (int i = 0; i < NROPES; i++) {
+		destroy_rope(ropes[i]);		
+	}
+
+	lock_destroy(ropes_left_lk);
+	lock_destroy(thread_lk);
+	lock_destroy(stakes_lk);
+	cv_destroy(thread_cv);
+
+	kprintf("Main thread done\n");
+
+	// Reset to default value
+	ropes_left = NROPES;
 }
 
 /*
@@ -94,9 +112,10 @@ dandelion(void *p, unsigned long arg)
 		if(!ropes[rope]->severed) {
 			lock_acquire(ropes[rope]->rope_lk);
 
+			//recheck rope are not severed after acquiring the lock
 			if(!ropes[rope]->severed) {
 				ropes[rope]->severed = true;
-				kprintf("Dandelion severed rope %d\n", ropes[rope]->rope_num);
+				kprintf("Dandelion severed rope %d\n", rope);
 
 				lock_acquire(ropes_left_lk);
 				ropes_left--;
@@ -106,13 +125,17 @@ dandelion(void *p, unsigned long arg)
 				thread_yield();
 			} else {
 				lock_release(ropes[rope]->rope_lk);
+				thread_yield();		//TODO: needed?
 			}
 		}
 	}
 
 	lock_acquire(thread_lk);
 	cv_signal(thread_cv, thread_lk);
+	kprintf("Dandelion thread done\n");
 	lock_release(thread_lk);
+
+	thread_exit();
 }
 
 static
@@ -125,6 +148,40 @@ marigold(void *p, unsigned long arg)
 	kprintf("Marigold thread starting\n");
 
 	/* Implement this function */
+
+	// access ropes through stakes
+
+	while (ropes_left > 0) {
+		int stake = random() % NROPES;
+		int rope = stakes[stake];
+
+		if(!ropes[rope]->severed) {
+			lock_acquire(ropes[rope]->rope_lk);
+
+			//recheck rope are not severed after acquiring the lock
+			if(!ropes[rope]->severed) {
+				ropes[rope]->severed = true;
+				kprintf("Marigold severed rope %d from stake %d\n", rope, stake);
+
+				lock_acquire(ropes_left_lk);
+				ropes_left--;
+				lock_release(ropes_left_lk);
+
+				lock_release(ropes[rope]->rope_lk);
+				thread_yield();
+			} else {
+				lock_release(ropes[rope]->rope_lk);
+				thread_yield();		//TODO: needed?
+			}
+		}
+	}
+
+	lock_acquire(thread_lk);
+	cv_signal(thread_cv, thread_lk);
+	kprintf("Marigold thread done\n");
+	lock_release(thread_lk);
+
+	thread_exit();
 }
 
 static
@@ -137,6 +194,51 @@ flowerkiller(void *p, unsigned long arg)
 	kprintf("Lord FlowerKiller thread starting\n");
 
 	/* Implement this function */
+
+	// acces ropes through stakes
+
+	while (ropes_left > 0) {
+		int stake_old = random() % NROPES;
+		int rope_old = stakes[stake_old];
+		int stake_new = random() % NROPES;
+		int rope_new = stakes[stake_new];
+
+		// If both ropes are the same, choose a different new rope
+		if(rope_old == rope_new) {	
+			stake_new = random() % NROPES;
+			rope_new = stakes[stake_new];
+		}
+
+		if(!ropes[rope_old]->severed && !ropes[rope_new]->severed) {
+			lock_acquire(ropes[rope_new]->rope_lk);
+			lock_acquire(ropes[rope_old]->rope_lk);
+
+			// Recheck ropes are not severed after acquiring the lock
+			if(!ropes[rope_old]->severed && !ropes[rope_new]->severed) {
+				lock_acquire(stakes_lk);
+				int temp = stakes[stake_old];
+				stakes[stake_old] = stakes[stake_new];
+				stakes[stake_new] = temp;
+				lock_release(stakes_lk);
+				
+				kprintf("Lord FlowerKiller switched rope %d from stake %d to stake %d\n", rope_old, stake_old, stake_new);
+				kprintf("Lord FlowerKiller switched rope %d from stake %d to stake %d\n", rope_new, stake_new, stake_old);
+
+				lock_release(ropes[rope_new]->rope_lk);
+				thread_yield();
+			} else {
+				lock_release(ropes[rope_old]->rope_lk);
+				thread_yield();		//TODO: needed?
+			}
+		}
+	}
+
+	lock_acquire(thread_lk);
+	cv_signal(thread_cv, thread_lk);
+	kprintf("Lord FlowerKiller thread done\n");
+	lock_release(thread_lk);
+
+	thread_exit();
 }
 
 static
@@ -149,6 +251,7 @@ balloon(void *p, unsigned long arg)
 	kprintf("Balloon thread starting\n");
 
 	/* Implement this function */
+
 }
 
 
@@ -157,8 +260,8 @@ int
 airballoon(int nargs, char **args)
 {
 
-	int err = 0, i;
-	// int err = 0;
+	// int err = 0, i;
+	int err = 0;
 
 	(void)nargs;
 	(void)args;
@@ -176,12 +279,17 @@ airballoon(int nargs, char **args)
 	if(err)
 		goto panic;
 
-	for (i = 0; i < N_LORD_FLOWERKILLER; i++) {
-		err = thread_fork("Lord FlowerKiller Thread",
-				  NULL, flowerkiller, NULL, 0);
-		if(err)
-			goto panic;
-	}
+	// for (i = 0; i < N_LORD_FLOWERKILLER; i++) {
+	// 	err = thread_fork("Lord FlowerKiller Thread",
+	// 			  NULL, flowerkiller, NULL, 0);
+	// 	if(err)
+	// 		goto panic;
+	// }
+	err = thread_fork("Lord FlowerKiller Thread",
+				NULL, flowerkiller, NULL, 0);
+	if(err)
+		goto panic;
+
 
 	err = thread_fork("Air Balloon",
 			  NULL, balloon, NULL, 0);
@@ -194,5 +302,6 @@ panic:
 	      strerror(err));
 
 done:
+	clean_up();
 	return 0;
 }
