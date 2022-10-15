@@ -1,0 +1,35 @@
+1. What are the ELF magic numbers?
+    The elf magic numbers are 0x7f 'E' 'L' 'F', found on line 83 of src/kern/include/elf.h
+    These numbers are a 4-byte header which is used to identify an ELF executable file.
+
+3. Why can the uio struct that is used to read in a segment be allocated on the stack in load_segment() (i.e. where does the memory read really go)?
+    The uio struct contains an iovec struct which holds the virtual address where we want to read the data to, this can be seen on line 96 and 98 in 
+    kern/syscall/loadelf.c. An example of this happening is on line 202 of kern/fs/sfs/sfs_io.c when uimove is called and the data will copied out of a file
+    and into the vaddr that is in iov->iov_ubase. (this description could be better). The data is being read into a virtual memory address so it is fine that
+    we allocate uio on the stack in load_segment.
+
+5. What function forces the processor to switch into usermode? Is this function machine dependent?
+    the `enter_new_process` function found at kern/arc/mips/locore/trap.c:438 forces a switch to user mode. It is machine dependent because it is located in the 
+    kern/arc/mips/ directory.
+
+
+7. What (briefly) is the purpose of userptr_t?
+    It is a pointer to a one-byte struct which is used so it won't mix with other pointers. The main purpose is so that we know that the pointer points to an
+    user level memory space rather than a kernel level memory space.
+
+9. How many bytes is an instruction in MIPS? (Answer this by reading syscall() carefully, not by looking somewhere else.)
+    An instruction in MIPS is 4 bytes. This can be interpreted from line 141 in kern/arch/mips/syscall/syscall.c as the program counter
+    is incremented by 4 to avoid restarting the syscall over and over again.
+
+11. What would be required to implement a system call that took more than 4 arguments?
+    If we were to implement a system call that took more than 4 arguments, we would have to fetch extra arguments starting from 
+    sp+16 in `syscall`, they must be fetched by using copyin(). These details can be found in the comments above the syscall function in kern/arch/mips/syscall/syscall.c.
+
+13. What is the MIPS instruction that actually triggers a system call? (Answer this by reading the source in this directory, not looking somewhere else.)
+    The instruction that actually triggers the system call is `syscall` and is on line 84 of src/userland/lib/libc/arch/mips/syscalls-mips.S
+
+15. As you were reading the code in runprogram.c and loadelf.c, you probably noticed how the kernel manipulates the files. Which kernel function is called to open a file? 
+    Which macro is called to read the file? What about to write a file? Which data structure is used in the kernel to represent an open file? 
+    vfs_open is the kernel function that is called to open a file. 
+    VOP_READ is the macro that is called to read the file. VOP_WRITE is the macro that is called to write a file.
+    A vnode is the datastructure that is used to represent an open file.
