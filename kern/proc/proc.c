@@ -48,6 +48,11 @@
 #include <current.h>
 #include <addrspace.h>
 #include <vnode.h>
+#include <file_syscalls.h>
+#include <limits.h>
+#include <synch.h>
+#include <kern/fcntl.h>
+#include <vfs.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -62,6 +67,7 @@ struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
+	struct fds *p_fds;
 
 	proc = kmalloc(sizeof(*proc));
 	if (proc == NULL) {
@@ -82,6 +88,17 @@ proc_create(const char *name)
 	/* VFS fields */
 	proc->p_cwd = NULL;
 
+	// create some file table structure
+	p_fds = kmalloc(sizeof(struct fds));
+	KASSERT(p_fds != NULL);
+	struct file **files = kmalloc(OPEN_MAX * (sizeof(struct file *)));
+	KASSERT(files != NULL);
+	for (int i = 0 ; i < OPEN_MAX; i++) {
+		files[i] = NULL;
+	}
+	p_fds->files = files;
+	p_fds->lk = lock_create("Process File Descriptors");
+	proc->p_fds = p_fds;
 	return proc;
 }
 
@@ -164,6 +181,19 @@ proc_destroy(struct proc *proc)
 		}
 		as_destroy(as);
 	}
+///// Added this
+	lock_destroy(proc->p_fds->lk);
+	for (int i = 0; i < OPEN_MAX; i++) {
+		if (proc->p_fds->files[i] != NULL) {
+			kfree(proc->p_fds->files[i]);
+			proc->p_fds->files[i] = NULL;
+		}
+	}
+	kfree(proc->p_fds->files);
+	proc->p_fds->files = NULL;
+	kfree(proc->p_fds);
+	proc->p_fds = NULL;
+/////
 
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
@@ -171,6 +201,7 @@ proc_destroy(struct proc *proc)
 	kfree(proc->p_name);
 	kfree(proc);
 }
+
 
 /*
  * Create the process structure for the kernel.
@@ -194,12 +225,55 @@ struct proc *
 proc_create_runprogram(const char *name)
 {
 	struct proc *newproc;
+	struct file *file;
+	int err = 0;
+	const char *std_in, *std_out, *std_err;
+	std_in = kstrdup("con:");
+	std_out = kstrdup("con:");
+	std_err = kstrdup("con:");
 
 	newproc = proc_create(name);
 	if (newproc == NULL) {
 		return NULL;
 	}
 
+	for (int i = 0; i < 3; i++) {
+		switch(i) {
+			case 0:
+			file = (struct file *)kmalloc(sizeof(struct file));
+			file->lk = lock_create("stdin");
+			file->status = O_RDONLY;
+			file->offset = 0;
+			file->refcount = 1;
+			err = vfs_open(kstrdup(std_in), file->status, 0, &(file->vn));
+			newproc->p_fds->files[i] = file;
+			break;
+
+			case 1:
+			file = (struct file *)kmalloc(sizeof(struct file));
+			file->lk = lock_create("stdout");
+			file->status = O_WRONLY;
+			file->offset = 0;
+			file->refcount = 1;
+			err = vfs_open(kstrdup(std_out), file->status, 0, &(file->vn));
+			newproc->p_fds->files[i] = file;
+			break;
+
+			case 2:
+			file = (struct file *)kmalloc(sizeof(struct file));
+			file->lk = lock_create("stderr");
+			file->status = O_WRONLY;
+			file->offset = 0;
+			file->refcount = 1;
+			err = vfs_open(kstrdup(std_err), file->status, 0, &(file->vn));
+			newproc->p_fds->files[i] = file;
+			break;
+		}
+		if (err) {
+			return NULL;
+		}
+	}
+	newproc->p_fds->open_count = 3;
 	/* VM fields */
 
 	newproc->p_addrspace = NULL;
