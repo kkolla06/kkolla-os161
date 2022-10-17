@@ -20,4 +20,5 @@ struct fds {
     int open_count;         // used to check if we have reached max open files
 };
 
+int sys_open(const char *filename, int flags, int32_t *retval);
 #endif /* _FILE__SYSCALLS_H_ */
