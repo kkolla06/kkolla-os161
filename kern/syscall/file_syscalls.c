@@ -81,3 +81,25 @@ copyin_error:
     kfree(actual);
     return result;
 }
+
+int
+sys_read(int fd, void *buf, size_t buflen, int32_t *retval)
+{
+    int result;
+    struct file *file;
+    KASSERT(curproc->p_fds != NULL);
+    if (fd < 0 || fd >= OPEN_MAX || curproc->p_fds->files[fd] == NULL) {
+        return EBADF;
+    }
+    file = curproc->p_fds->files[fd];
+    if (file->status & O_WRONLY) {
+        return EBADF;
+    }
+    result = 0;
+    lock_acquire(file->lk);
+
+    // read the file into the buffer
+done:
+    lock_release(file->lk);
+    return result;
+}
