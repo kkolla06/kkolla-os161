@@ -8,6 +8,8 @@
 #include <vfs.h>
 #include <kern/errno.h>
 #include <vnode.h>
+#include <uio.h>
+#include <kern/fcntl.h>
 
 static
 void init_file(struct file *file, int fd, int flags)
@@ -95,10 +97,20 @@ sys_read(int fd, void *buf, size_t buflen, int32_t *retval)
     if (file->status & O_WRONLY) {
         return EBADF;
     }
+    struct uio uio;
+    struct iovec iov;
     result = 0;
     lock_acquire(file->lk);
 
-    // read the file into the buffer
+    uio_uinit(&iov, &uio, (userptr_t)buf, buflen, file->offset, UIO_READ);
+
+    result = VOP_READ(file->vn, &uio);
+    if (result) {
+        goto done;
+    }
+
+    file->offset = uio.uio_offset;
+    *retval = uio.uio_resid;
 done:
     lock_release(file->lk);
     return result;

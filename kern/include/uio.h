@@ -56,6 +56,7 @@
  */
 
 #include <kern/iovec.h>
+#include <types.h>
 
 /* Direction. */
 enum uio_rw {
@@ -138,5 +139,19 @@ int uiomovezeros(size_t len, struct uio *uio);
 void uio_kinit(struct iovec *, struct uio *,
 	       void *kbuf, size_t len, off_t pos, enum uio_rw rw);
 
+/*
+ * Initialize a uio suitable for I/O from a user buffer.
+ *
+ * Usage example;
+ * 	char buf[128];
+ * 	struct iovec iov;
+ * 	struct uio myuio;
+ *
+ * 	uio_kinit(&iov, &myuio, buf, sizeof(buf), 0, UIO_READ);
+ *      result = VOP_READ(vn, &myuio);
+ *      ...
+ */
+void uio_uinit(struct iovec *, struct uio *,
+	       userptr_t ubuf, size_t len, off_t pos, enum uio_rw rw);
 
 #endif /* _UIO_H_ */
