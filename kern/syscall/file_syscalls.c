@@ -10,6 +10,7 @@
 #include <vnode.h>
 #include <uio.h>
 #include <kern/fcntl.h>
+#include <kern/stat.h>
 
 static
 void init_file(struct file *file, int flags)
@@ -17,7 +18,7 @@ void init_file(struct file *file, int flags)
     KASSERT(file != NULL);
     file->lk = lock_create("File lock.");
     file->status = flags;
-    file->offset = 0; // what should this be.
+    file->offset = 0; // what should this be (no need to handle append flag, i think it's okay)
     file->refcount = 1;
 }
 
@@ -119,6 +120,7 @@ done:
 int 
 sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval) 
 {
+    // TODO: complete implementation
     int result;
     struct file *file;
     KASSERT(curproc->p_fds != NULL);
@@ -170,6 +172,62 @@ done:
     return 0;
 }
 
+int
+sys_lseek(int fd, off_t pos, const_userptr_t whence_ptr, int32_t *retval0, int32_t *retval1) 
+{
+    KASSERT(curproc->p_fds != NULL);
+    int result = 0;
+    int whence;
+    if (fd < 0 || fd >= OPEN_MAX || curproc->p_fds->files[fd] == NULL) {
+        return EBADF;
+    }
+    struct file *file = curproc->p_fds->files[fd];
+    if (!VOP_ISSEEKABLE(file->vn)) {
+        return ESPIPE;
+    }
+
+    lock_acquire(file->lk);
+    struct stat *st = kmalloc(sizeof(struct stat *));
+    result = VOP_STAT(file->vn, st);
+    off_t file_size = st->st_size;
+    kfree(st);
+    if (result) {
+        goto done;
+    }
+
+    result = copyin(whence_ptr, &whence, sizeof(int));
+    if (result) {
+        goto done;
+    }
+
+    off_t seek_pos = -1;
+    switch (whence) {
+        case 0: // SEEK_SET
+            seek_pos = pos;
+        break;
+        case 1: // SEEK_CUR
+            seek_pos = file->offset + pos;
+        break;
+        case 2: // SEEK_END
+            seek_pos = file_size + pos;
+        break;
+        default:
+        return EINVAL;
+    }
+
+    if (seek_pos < 0) {
+        return EINVAL;
+    }
+    file->offset = seek_pos;
+    // Kern byte order is Big-Endian, endian.h:42
+    *retval1 = seek_pos;
+    *retval0 = seek_pos >> 32;
+done: 
+    lock_release(file->lk);
+    return result;
+}
+
+int
 sys_chdir(const char *pathname) 
 {
     if (pathname == NULL) {
@@ -195,6 +253,7 @@ done:
 int 
 sys___getcwd(char *buf, size_t buflen, int32_t *retval) 
 {
+    // TODO: implement this
     // cast to void so build doesn't fail
     (void)buf;
     (void)buflen;
@@ -205,9 +264,47 @@ sys___getcwd(char *buf, size_t buflen, int32_t *retval)
 int 
 sys_dup2(int oldfd, int newfd, int32_t *retval) 
 {
-    (void)oldfd;
-    (void)newfd;
-    (void)retval;
+    KASSERT(curproc->p_fds != NULL);
+    int result = 0;
+    if (oldfd == newfd) {
+        *retval = oldfd;
+        return result;
+    }
+    if (oldfd < 0 || oldfd >= OPEN_MAX || curproc->p_fds->files[oldfd] == NULL ||
+        newfd < 0 || newfd >= OPEN_MAX) {
+        return EBADF;
+    }
+    lock_acquire(curproc->p_fds->lk);
+    if (curproc->p_fds->open_count == OPEN_MAX) {
+        result = EMFILE;
+        goto done;
+    }
 
-    return 0;
+    if (curproc->p_fds->files[newfd] != NULL) {
+        // close newfd
+        struct file *file = curproc->p_fds->files[newfd];
+        lock_acquire(file->lk);
+        if (--file->refcount > 0) {
+            lock_release(file->lk);
+        }
+        else {
+            vfs_close(file->vn);
+            lock_release(file->lk);
+            lock_destroy(file->lk);
+
+            kfree(curproc->p_fds->files[newfd]);
+        }
+        curproc->p_fds->files[newfd] = NULL;
+        curproc->p_fds->open_count--;
+    }
+    lock_acquire(curproc->p_fds->files[oldfd]->lk);
+    curproc->p_fds->files[oldfd]->refcount++;
+    curproc->p_fds->files[newfd] = curproc->p_fds->files[oldfd];
+    lock_release(curproc->p_fds->files[oldfd]->lk);
+
+    curproc->p_fds->open_count++; // should we inc the count on a dup?
+    *retval = newfd;
+done:
+    lock_release(curproc->p_fds->lk);
+    return result;
 }
