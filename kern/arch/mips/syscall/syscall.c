@@ -35,7 +35,7 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
-
+#include <file_syscalls.h>
 
 /*
  * System call dispatcher.
@@ -116,6 +116,14 @@ syscall(struct trapframe *tf)
 
 		case SYS_read:
 		err = sys_read((int)tf->tf_a0, (void *)tf->tf_a1, (size_t)tf->tf_a2, &retval);
+		break;
+
+		case SYS_chdir:
+		err = sys_chdir((const char *)tf->tf_a0);
+		break;
+
+		case SYS_dup2:
+		err = sys_dup2((int)tf->tf_a0, (int)tf->tf_a1, &retval);
 		break;
 
 	    default:

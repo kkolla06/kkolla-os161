@@ -22,4 +22,6 @@ struct fds {
 
 int sys_open(const char *filename, int flags, int32_t *retval);
 int sys_read(int fd, void *buf, size_t buflen, int32_t *retval);
+int sys_chdir(const char *pathname);
+int sys_dup2(int oldfd, int newfd, int32_t *retval);
 #endif /* _FILE__SYSCALLS_H_ */

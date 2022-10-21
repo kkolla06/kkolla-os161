@@ -12,7 +12,7 @@
 #include <kern/fcntl.h>
 
 static
-void init_file(struct file *file, int fd, int flags)
+void init_file(struct file *file, int flags)
 {
     KASSERT(file != NULL);
     file->lk = lock_create("File lock.");
@@ -63,7 +63,7 @@ sys_open(const char *filename, int flags, int32_t *retval)
 
     // create and init a file
     file = kmalloc(sizeof(struct file));
-    init_file(file, fd, flags);
+    init_file(file, flags);
 
     // vfs_open will handle opening the file and setting the vnode
     result = vfs_open(kern_filename, flags, 0, &(file->vn)); 
@@ -114,4 +114,37 @@ sys_read(int fd, void *buf, size_t buflen, int32_t *retval)
 done:
     lock_release(file->lk);
     return result;
+}
+
+int
+sys_chdir(const char *pathname) 
+{
+    if (pathname == NULL) {
+        return EFAULT;
+    }
+    char *kpathname = (char *)kmalloc(PATH_MAX);
+    size_t *actual = (size_t *)kmalloc(sizeof(size_t));
+    int result = 0;
+
+    // Copy the filename string from  user space to kernel space.
+    result = copyinstr((const_userptr_t)pathname, kpathname, PATH_MAX, actual);
+    if (result) {
+        goto done;    
+    }
+
+    result = vfs_chdir(kpathname);
+done:
+    kfree(kpathname);
+    kfree(actual);
+    return result;
+}
+
+int 
+sys_dup2(int oldfd, int newfd, int32_t *retval) 
+{
+    (void)oldfd;
+    (void)newfd;
+    (void)retval;
+
+    return 0;
 }
