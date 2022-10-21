@@ -116,6 +116,60 @@ done:
     return result;
 }
 
+int 
+sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval) 
+{
+    int result;
+    struct file *file;
+    KASSERT(curproc->p_fds != NULL);
+    if (fd < 0 || fd >= OPEN_MAX || curproc->p_fds->files[fd] == NULL) {
+        return EBADF;
+    }
+    file = curproc->p_fds->files[fd];
+    if (file->status & O_WRONLY) {
+        return EBADF;
+    }
+
+    struct uio uio;
+    struct iovec iov;
+    result = 0;
+    lock_acquire(file->lk);
+}
+
+
+int
+sys_close(int fd) 
+{
+    struct file *file;
+
+    KASSERT(curproc->p_fds != NULL);
+    if (fd < 0 || fd >= OPEN_MAX || curproc->p_fds->files[fd] == NULL) {
+        return EBADF;
+    }
+
+    file = curproc->p_fds->files[fd];
+    //if (file->status & O_WRONLY) {
+    //    return EBADF;
+    //}
+
+    lock_acquire(curproc->p_fds->lk);
+    lock_acquire(file->lk);
+    if (--file->refcount > 0) {
+        lock_release(file->lk);
+        goto done;
+    }
+    vfs_close(file->vn);
+    lock_release(file->lk);
+    lock_destroy(file->lk);
+
+    kfree(curproc->p_fds->files[fd]);
+done:
+    curproc->p_fds->files[fd] = NULL;
+    curproc->p_fds->open_count--;
+    lock_release(curproc->p_fds->lk);
+    return 0;
+}
+
 sys_chdir(const char *pathname) 
 {
     if (pathname == NULL) {
@@ -139,6 +193,16 @@ done:
 }
 
 int 
+sys___getcwd(char *buf, size_t buflen, int32_t *retval) 
+{
+    // cast to void so build doesn't fail
+    (void)buf;
+    (void)buflen;
+    (void)retval;
+    return 0;
+}
+
+int 
 sys_dup2(int oldfd, int newfd, int32_t *retval) 
 {
     (void)oldfd;
@@ -146,51 +210,4 @@ sys_dup2(int oldfd, int newfd, int32_t *retval)
     (void)retval;
 
     return 0;
-int 
-    int result;
-    struct file *file;
-    KASSERT(curproc->p_fds != NULL);
-    if (fd < 0 || fd >= OPEN_MAX || curproc->p_fds->files[fd] == NULL) {
-        return EBADF;
-    }
-    file = curproc->p_fds->files[fd];
-    if (file->status & O_WRONLY) {
-        return EBADF;
-    }
-
-    struct uio uio;
-    struct iovec iov;
-    result = 0;
-    lock_acquire(file->lk);
-}
-
-int
-sys_close(int fd) {
-    struct file *file;
-
-    KASSERT(curproc->p_fds != NULL);
-    if (fd < 0 || fd >= OPEN_MAX || curproc->p_fds->files[fd] == NULL) {
-        return EBADF;
-    }
-
-    file = curproc->p_fds->files[fd];
-    if (file->status & O_WRONLY) {
-        return EBADF;
-    }
-
-    lock_acquire(curproc->p_fds->lk);
-
-    kfree(file->kern_filename);
-    kfree(file);
-    // vfs_close(file);
-
-    curproc->p_fds->open_count--;
-    lock_release(curproc->p_fds->lk);
-    
-    return 0;
-}
-
-int 
-__getcwd(char *buf, size_t buflen) {
-
 }
