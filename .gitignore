@@ -1,5 +1,6 @@
 cscope*
 build/*
+kern/build
 defs.mk
 kern/compile/*
 userland/*

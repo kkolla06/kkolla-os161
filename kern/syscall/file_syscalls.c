@@ -111,7 +111,7 @@ sys_read(int fd, void *buf, size_t buflen, int32_t *retval)
     }
 
     file->offset = uio.uio_offset;
-    *retval = uio.uio_resid;
+    *retval = buflen - uio.uio_resid;  // uio_resid is the remaining amount to buffer
 done:
     lock_release(file->lk);
     return result;
@@ -137,7 +137,6 @@ sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval)
     result = 0;
     lock_acquire(file->lk);
 }
-
 
 int
 sys_close(int fd) 
@@ -212,11 +211,13 @@ sys_lseek(int fd, off_t pos, const_userptr_t whence_ptr, int32_t *retval0, int32
             seek_pos = file_size + pos;
         break;
         default:
-        return EINVAL;
+        result = EINVAL;
+        goto done;
     }
 
     if (seek_pos < 0) {
-        return EINVAL;
+        result = EINVAL;
+        goto done;
     }
     file->offset = seek_pos;
     // Kern byte order is Big-Endian, endian.h:42
