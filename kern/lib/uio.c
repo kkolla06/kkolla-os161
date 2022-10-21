@@ -179,7 +179,7 @@ uio_uinit(struct iovec *iov, struct uio *u,
 	u->uio_iovcnt = 1;
 	u->uio_offset = pos;
 	u->uio_resid = len;
-	u->uio_segflg = UIO_SYSSPACE;
+	u->uio_segflg = UIO_USERSPACE;
 	u->uio_rw = rw;
 	u->uio_space = curproc->p_addrspace;
 }

@@ -44,6 +44,7 @@
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
+#include <synch.h>
 
 /*
  * In-kernel menu and command dispatcher.
@@ -713,10 +714,12 @@ menu(char *args)
 	char buf[64];
 
 	menu_execute(args, 1);
+	struct semaphore *sem = sem_create("block menu", 0);
 
 	while (1) {
 		kprintf("OS/161 kernel [? for menu]: ");
 		kgets(buf, sizeof(buf));
 		menu_execute(buf, 0);
+		P(sem); // temp blocking behaviour for assignment 4
 	}
 }
