@@ -10,7 +10,6 @@ struct file {
     int status;             // value for the read and write flags
     struct vnode *vn;       
     struct lock *lk;        // lock so that only one thread can access this file at time
-    int refcount;           // count for number of refrences to the file
 };
 
 struct fds {

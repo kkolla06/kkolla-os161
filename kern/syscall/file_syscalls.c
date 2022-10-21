@@ -19,7 +19,6 @@ void init_file(struct file *file, int flags)
     file->lk = lock_create("File lock.");
     file->status = flags;
     file->offset = 0; // what should this be (no need to handle append flag, i think it's okay)
-    file->refcount = 1;
 }
 
 static
@@ -121,6 +120,8 @@ int
 sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval) 
 {
     // TODO: complete implementation
+    (void) retval;
+    (void) nbytes;
     int result;
     struct file *file;
     KASSERT(curproc->p_fds != NULL);
@@ -155,11 +156,12 @@ sys_close(int fd)
 
     lock_acquire(curproc->p_fds->lk);
     lock_acquire(file->lk);
-    if (--file->refcount > 0) {
+    vfs_close(file->vn); // this will decrement the refcount for this file
+    
+    if (file->vn->vn_refcount > 0) {
         lock_release(file->lk);
         goto done;
     }
-    vfs_close(file->vn);
     lock_release(file->lk);
     lock_destroy(file->lk);
 
@@ -285,21 +287,21 @@ sys_dup2(int oldfd, int newfd, int32_t *retval)
         // close newfd
         struct file *file = curproc->p_fds->files[newfd];
         lock_acquire(file->lk);
-        if (--file->refcount > 0) {
-            lock_release(file->lk);
-        }
-        else {
-            vfs_close(file->vn);
+        vfs_close(file->vn);
+        // if there are no more refs, we free memory
+        if (file->vn->vn_refcount == 0) {
             lock_release(file->lk);
             lock_destroy(file->lk);
-
             kfree(curproc->p_fds->files[newfd]);
+        }
+        else {
+            lock_release(file->lk);
         }
         curproc->p_fds->files[newfd] = NULL;
         curproc->p_fds->open_count--;
     }
     lock_acquire(curproc->p_fds->files[oldfd]->lk);
-    curproc->p_fds->files[oldfd]->refcount++;
+    VOP_INCREF(curproc->p_fds->files[oldfd]->vn);
     curproc->p_fds->files[newfd] = curproc->p_fds->files[oldfd];
     lock_release(curproc->p_fds->files[oldfd]->lk);
 

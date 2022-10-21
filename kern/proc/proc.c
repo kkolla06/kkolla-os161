@@ -244,7 +244,6 @@ proc_create_runprogram(const char *name)
 			file->lk = lock_create("stdin");
 			file->status = O_RDONLY;
 			file->offset = 0;
-			file->refcount = 1;
 			err = vfs_open(kstrdup(std_in), file->status, 0, &(file->vn));
 			newproc->p_fds->files[i] = file;
 			break;
@@ -254,7 +253,6 @@ proc_create_runprogram(const char *name)
 			file->lk = lock_create("stdout");
 			file->status = O_WRONLY;
 			file->offset = 0;
-			file->refcount = 1;
 			err = vfs_open(kstrdup(std_out), file->status, 0, &(file->vn));
 			newproc->p_fds->files[i] = file;
 			break;
@@ -264,7 +262,6 @@ proc_create_runprogram(const char *name)
 			file->lk = lock_create("stderr");
 			file->status = O_WRONLY;
 			file->offset = 0;
-			file->refcount = 1;
 			err = vfs_open(kstrdup(std_err), file->status, 0, &(file->vn));
 			newproc->p_fds->files[i] = file;
 			break;
