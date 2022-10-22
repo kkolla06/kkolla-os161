@@ -119,7 +119,6 @@ done:
 int 
 sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval) 
 {
-    // TODO: I assumed nbytes is the length of buf?
     int result;
     struct file *file;
     KASSERT(curproc->p_fds != NULL);
@@ -127,7 +126,7 @@ sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval)
         return EBADF;
     }
     file = curproc->p_fds->files[fd];
-    if (file->status & O_WRONLY) {
+    if (file->status & O_RDONLY) {
         return EBADF;
     }
 
@@ -143,9 +142,8 @@ sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval)
         goto done;
     }
 
-    file->offset += uio.uio_offset;  // I am adding the offset but does uio_uinit return the updated offset?
+    file->offset = uio.uio_offset;  
     *retval = nbytes - uio.uio_resid;
-    
 done:
     lock_release(file->lk);
 
@@ -266,7 +264,10 @@ done:
 
 int 
 sys___getcwd(char *buf, size_t buflen, int32_t *retval) 
-{
+{   
+    if (buf == NULL) {
+        return EFAULT;
+    }
 	int result;
 
     struct uio uio;
@@ -282,11 +283,9 @@ sys___getcwd(char *buf, size_t buflen, int32_t *retval)
 		goto done;
 	}
 
-	*retval = buflen - uio.uio_resid;   //TODO: unsure
-
+	*retval = buflen - uio.uio_resid;
 done:
-    lock_release(file->lk);
-
+    lock_release(curproc->p_fds->lk);
     return result;
 }
 
