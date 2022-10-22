@@ -119,9 +119,7 @@ done:
 int 
 sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval) 
 {
-    // TODO: complete implementation
-    (void) retval;
-    (void) nbytes;
+    // TODO: I assumed nbytes is the length of buf?
     int result;
     struct file *file;
     KASSERT(curproc->p_fds != NULL);
@@ -137,6 +135,21 @@ sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval)
     struct iovec iov;
     result = 0;
     lock_acquire(file->lk);
+
+    uio_uinit(&iov, &uio, (userptr_t)buf, nbytes, file->offset, UIO_WRITE);
+
+    result = VOP_WRITE(file->vn, &uio);
+    if (result) {
+        goto done;
+    }
+
+    file->offset += uio.uio_offset;  // I am adding the offset but does uio_uinit return the updated offset?
+    *retval = nbytes - uio.uio_resid;
+    
+done:
+    lock_release(file->lk);
+
+    return result;
 }
 
 int
@@ -150,9 +163,6 @@ sys_close(int fd)
     }
 
     file = curproc->p_fds->files[fd];
-    //if (file->status & O_WRONLY) {
-    //    return EBADF;
-    //}
 
     lock_acquire(curproc->p_fds->lk);
     lock_acquire(file->lk);
@@ -170,6 +180,7 @@ done:
     curproc->p_fds->files[fd] = NULL;
     curproc->p_fds->open_count--;
     lock_release(curproc->p_fds->lk);
+    
     return 0;
 }
 
@@ -256,12 +267,27 @@ done:
 int 
 sys___getcwd(char *buf, size_t buflen, int32_t *retval) 
 {
-    // TODO: implement this
-    // cast to void so build doesn't fail
-    (void)buf;
-    (void)buflen;
-    (void)retval;
-    return 0;
+	int result;
+
+    struct uio uio;
+    struct iovec iov;
+    result = 0;
+
+    lock_acquire(curproc->p_fds->lk);
+
+	uio_uinit(&iov, &uio, (userptr_t)buf, buflen, 0, UIO_READ);
+
+	result = vfs_getcwd(&uio);
+	if (result) {
+		goto done;
+	}
+
+	*retval = buflen - uio.uio_resid;   //TODO: unsure
+
+done:
+    lock_release(file->lk);
+
+    return result;
 }
 
 int 
