@@ -12,6 +12,12 @@
 #include <kern/fcntl.h>
 #include <kern/stat.h>
 
+/*
+ * Initialze a fields of a `struct file` while providing the file's flags.
+ * Offset is set to 0 when the file is opened becuase O_APPEND is not required. 
+ * 
+ * Params: struct file * for the struct we are initializing, int for the file flags
+ */
 static
 void init_file(struct file *file, int flags)
 {
@@ -21,6 +27,13 @@ void init_file(struct file *file, int flags)
     file->offset = 0; // what should this be (no need to handle append flag, i think it's okay)
 }
 
+/*
+ * Returns an available file descriptor.
+ *
+ * It will search through our file descriptors and return the 
+ * smallest available file descriptor. Returns OPEN_MAX+1 if 
+ * no file descriptors are available. 
+ */
 static
 int get_next_fd()
 {
@@ -36,6 +49,16 @@ int get_next_fd()
     return fd;
 }
 
+/*
+ * The open syscall. 
+ *
+ * Opens a file, `filename`, with `flags` and stores the file descriptor in `retval`.
+ * The process's `struct fds` will be updated to reflect the new open file.
+ * 
+ * Params: const char * for the filename, int for file flags, int32_t * for user return value.
+ * Return: Returns 0 on success, otherwise an error code is returned. *retval stores the fd of
+ *         file we open. 
+ */
 int
 sys_open(const char *filename, int flags, int32_t *retval)
 {
@@ -84,6 +107,20 @@ copyin_error:
     return result;
 }
 
+/*
+ * The read syscall.
+ *
+ * Reads up to `buflen` bytes from the file specified by `fd` at its current offset,
+ * and stores the bytes in `buf`. The file must be open for reading.
+ * 
+ * Params:  `fd` is the file descriptor associated to the file we want to read, 
+ *          `buf` is a buffer where we will be reading data into, `buflen` is 
+ *          a non-negative value and is the size of `buf`, `retval` is where 
+ *          we will store the user return value.
+ * Returns: Returns 0 on success, otherwise returns an error code.
+ *          The user return value is stored in `retval`, this value will
+ *          be the number of bytes read into `buf`.
+ */
 int
 sys_read(int fd, void *buf, size_t buflen, int32_t *retval)
 {
@@ -116,10 +153,23 @@ done:
     return result;
 }
 
+/*
+ * The write syscall.
+ * 
+ * Writes up to `nbytes` bytes to the file associated with `fd` at its current offset.
+ * The data to be written will be taken from `buf` and the file must be open for writing.
+ * 
+ * Params: `fd` is a file descriptor associated to a file we will write to, 
+ *         `buf` is the buffer containing the bytes we want to write to a file,
+ *         `nbytes` is the size of `buf`, `retval` will hold the return value that
+ *         is returned to the user.
+ * Return: Returns 0 on success, otherwise an error code is returned. 
+ *         `retval` will store the user return value which will be the
+ *         the number of bytes written to the file associated to `fd`.
+ */
 int 
 sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval) 
 {
-    // TODO: I assumed nbytes is the length of buf?
     int result;
     struct file *file;
     KASSERT(curproc->p_fds != NULL);
@@ -127,7 +177,7 @@ sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval)
         return EBADF;
     }
     file = curproc->p_fds->files[fd];
-    if (file->status & O_WRONLY) {
+    if (file->status & O_RDONLY) {
         return EBADF;
     }
 
@@ -143,15 +193,22 @@ sys_write(int fd, const void *buf, size_t nbytes, int32_t *retval)
         goto done;
     }
 
-    file->offset += uio.uio_offset;  // I am adding the offset but does uio_uinit return the updated offset?
+    file->offset = uio.uio_offset;  
     *retval = nbytes - uio.uio_resid;
-    
 done:
     lock_release(file->lk);
 
     return result;
 }
 
+/*
+ * The close syscall.
+ * 
+ * Close the file handle `fd`, decrement the refcount of the file associated to this `fd`.
+ * 
+ * Params: `fd` is the file decsriptor that we will close. 
+ * Return: Return 0.
+ */
 int
 sys_close(int fd) 
 {
@@ -184,6 +241,21 @@ done:
     return 0;
 }
 
+/*
+ * The lseek syscall. 
+ *
+ * Alter the current seek position of the file associated to `fd`, seeking to a new position
+ * based on `pos` and `whence_ptr`.
+ * 
+ * Params: `fd` is a file descriptor for a file we want to update the offset for,
+ *         `pos` is a value used for updating the offset, `whence_ptr` will indicate
+ *         how we want to update the file's offset, `retval0` will hold the upper
+ *         32-bits of the return value and `retval1` will hold the lower 32-bits.
+ * Return: Returns 0 on success, otherwise an error code will be returned. 
+ *         The user return value is 64-bits and is stored in `retval0` and `retval1`. 
+ *         The lower 32-bits for the user return value are stored in `retval1`, the upper
+ *         32-bits are stored in `retval0`.
+ */
 int
 sys_lseek(int fd, off_t pos, const_userptr_t whence_ptr, int32_t *retval0, int32_t *retval1) 
 {
@@ -241,6 +313,14 @@ done:
     return result;
 }
 
+/*
+ * The chdir syscall.
+ *
+ * The current directory of the current process is set to the directory named in `pathname`.
+ * 
+ * Params: `pathname` holds the name we want to change directories to.
+ * Return: Return 0 on success, otherwise return an error code.
+ */
 int
 sys_chdir(const char *pathname) 
 {
@@ -257,16 +337,32 @@ sys_chdir(const char *pathname)
         goto done;    
     }
 
+    lock_acquire(curproc->p_fds->lk);
     result = vfs_chdir(kpathname);
+    lock_release(curproc->p_fds->lk);
 done:
     kfree(kpathname);
     kfree(actual);
     return result;
 }
 
+/*
+ * The __getcwd syscall.
+ *
+ * The name of the current directory will be fetched and stored in `buf`.
+ * 
+ * Params: `buf` is the userspace buffer where we will read the cwd into.
+ *         `buflen` (must be non-negative) is the size allocated for `buf`, 
+ *         `retval` is where we will store the user return value.
+ * Return: Returns 0 on success, otherwise an error code is returned. `retval` will
+ *         store the length of the cwd, this will be returned to the user.
+ */
 int 
 sys___getcwd(char *buf, size_t buflen, int32_t *retval) 
-{
+{   
+    if (buf == NULL) {
+        return EFAULT;
+    }
 	int result;
 
     struct uio uio;
@@ -282,14 +378,24 @@ sys___getcwd(char *buf, size_t buflen, int32_t *retval)
 		goto done;
 	}
 
-	*retval = buflen - uio.uio_resid;   //TODO: unsure
-
+	*retval = buflen - uio.uio_resid;
 done:
-    lock_release(file->lk);
-
+    lock_release(curproc->p_fds->lk);
     return result;
 }
 
+/*
+ * The dup2 syscall.
+ *
+ * Duplicate the contents pointed to by `oldfd` to `newfd`. If `newfd` is currently in use we will close
+ * that file before duplicating `oldfd`. The refcount associated to the vnode for `oldfd` will be incremented
+ * upon duplication.
+ *
+ * Params: `oldfd` is the old descriptor we will duplicate, `newfd` is the descriptor we will update,
+ *         `retval` is where we will store the return value for the user.
+ * Return: On success we will return 0, otherwise an error code is returned. `retval` will store the 
+ *         file descriptor of the newfd which will be a duplicate of oldfd on success.
+ */
 int 
 sys_dup2(int oldfd, int newfd, int32_t *retval) 
 {
