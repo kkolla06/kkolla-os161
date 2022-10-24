@@ -58,6 +58,7 @@
  * The process for the kernel; this holds all the kernel-only threads.
  */
 struct proc *kproc;
+char *std_in, *std_out, *std_err;
 
 /*
  * Create a proc structure.
@@ -189,6 +190,18 @@ proc_destroy(struct proc *proc)
 			proc->p_fds->files[i] = NULL;
 		}
 	}
+	if (std_in != NULL) {
+		kfree(std_in);
+		std_in = NULL;
+	}
+	if (std_out != NULL) {
+		kfree(std_out);
+		std_out = NULL;
+	}
+	if (std_err != NULL) {
+		kfree(std_err);
+		std_err = NULL;
+	}
 	kfree(proc->p_fds->files);
 	proc->p_fds->files = NULL;
 	kfree(proc->p_fds);
@@ -227,16 +240,15 @@ proc_create_runprogram(const char *name)
 	struct proc *newproc;
 	struct file *file;
 	int err = 0;
-	const char *std_in, *std_out, *std_err;
-	std_in = kstrdup("con:");
-	std_out = kstrdup("con:");
-	std_err = kstrdup("con:");
 
 	newproc = proc_create(name);
 	if (newproc == NULL) {
 		return NULL;
 	}
 
+	std_in = kstrdup("con:");
+	std_out = kstrdup("con:");
+	std_err = kstrdup("con:");
 	for (int i = 0; i < 3; i++) {
 		switch(i) {
 			case 0:
@@ -244,7 +256,7 @@ proc_create_runprogram(const char *name)
 			file->lk = lock_create("stdin");
 			file->status = O_RDONLY;
 			file->offset = 0;
-			err = vfs_open(kstrdup(std_in), file->status, 0, &(file->vn));
+			err = vfs_open(std_in, file->status, 0, &(file->vn));
 			newproc->p_fds->files[i] = file;
 			break;
 
@@ -253,7 +265,7 @@ proc_create_runprogram(const char *name)
 			file->lk = lock_create("stdout");
 			file->status = O_WRONLY;
 			file->offset = 0;
-			err = vfs_open(kstrdup(std_out), file->status, 0, &(file->vn));
+			err = vfs_open(std_out, file->status, 0, &(file->vn));
 			newproc->p_fds->files[i] = file;
 			break;
 
@@ -262,7 +274,7 @@ proc_create_runprogram(const char *name)
 			file->lk = lock_create("stderr");
 			file->status = O_WRONLY;
 			file->offset = 0;
-			err = vfs_open(kstrdup(std_err), file->status, 0, &(file->vn));
+			err = vfs_open(std_err, file->status, 0, &(file->vn));
 			newproc->p_fds->files[i] = file;
 			break;
 		}
