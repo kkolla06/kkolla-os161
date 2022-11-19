@@ -172,6 +172,11 @@ proc_destroy(struct proc *proc)
 		as_destroy(as);
 	}
 
+	int thread_count= threadarray_num(&proc->p_threads);
+	for (int i = 0; i < thread_count; i++){
+		threadarray_remove(&proc->p_threads, i);
+	}
+
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 

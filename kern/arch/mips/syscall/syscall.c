@@ -114,6 +114,31 @@ syscall(struct trapframe *tf)
 		break;
 
 
+		/* Process calls*/
+		
+		case SYS_fork:
+		err = sys_fork(tf, &retval);
+		break;
+
+	    // case SYS_execv:
+		// err = sys_execv(
+		// 	(userptr_t)tf->tf_a0,
+		// 	(userptr_t)tf->tf_a1);
+		// break;
+
+	    case SYS__exit:
+		sys__exit();
+		panic("Returning from exit\n");
+
+	    case SYS_waitpid:
+		err = sys_waitpid(tf->tf_a0, (userptr_t)tf->tf_a1, tf->tf_a2, &retval);
+		break;
+
+	    case SYS_getpid:
+		err = sys_getpid(&retval);
+		break;
+
+
 	    /* file calls */
 
 	    case SYS_open:
@@ -196,7 +221,6 @@ syscall(struct trapframe *tf)
 
 	    /* Even more system calls will go here */
 
-
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
 		err = ENOSYS;
@@ -243,5 +267,10 @@ syscall(struct trapframe *tf)
 void
 enter_forked_process(struct trapframe *tf)
 {
-	(void)tf;
+	tf->tf_v0 = 0;
+	tf->tf_a3 = 0;
+
+	tf->tf_epc += 4; // To move the PC
+
+	mips_usermode(tf);
 }
