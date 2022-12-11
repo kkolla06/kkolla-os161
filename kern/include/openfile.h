@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008
+ * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009, 2014
  *	The President and Fellows of Harvard College.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,27 +27,45 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _LIMITS_H_
-#define _LIMITS_H_
-
 /*
- * System limits.
+ * File handles.
  */
 
-/* Get the limit values, which are exported to userland with private names. */
-#include <kern/limits.h>
+#ifndef _OPENFILE_H_
+#define _OPENFILE_H_
 
-/* Provide the real names */
-#define NAME_MAX        __NAME_MAX
-#define PATH_MAX        __PATH_MAX
-#define ARG_MAX         __ARG_MAX
-#define PID_MIN         __PID_MIN
-#define PID_MAX         __PID_MAX
-#define PIPE_BUF        __PIPE_BUF
-#define PROCS_MAX       __PROCS_MAX
-#define NGROUPS_MAX     __NGROUPS_MAX
-#define LOGIN_NAME_MAX  __LOGIN_NAME_MAX
-#define OPEN_MAX        __OPEN_MAX
-#define IOV_MAX         __IOV_MAX
+#include <spinlock.h>
 
-#endif /* _LIMITS_H_ */
+
+/*
+ * Structure for open files.
+ *
+ * This is pretty much just a wrapper around a vnode; the important
+ * additional things we keep here are the open mode and the file's
+ * seek position.
+ *
+ * Open files are reference-counted because they get shared via fork
+ * and dup2 calls. And they need locking because that sharing can be
+ * among multiple concurrent processes.
+ */
+struct openfile {
+	struct vnode *of_vnode;
+	int of_accmode;	/* from open: O_RDONLY, O_WRONLY, or O_RDWR */
+
+	struct lock *of_offsetlock;	/* lock for of_offset */
+	off_t of_offset;
+
+	struct spinlock of_reflock;	/* lock for of_refcount */
+	int of_refcount;
+};
+
+/* open a file (args must be kernel pointers; destroys filename) */
+int openfile_open(char *filename, int openflags, mode_t mode,
+		  struct openfile **ret);
+
+/* adjust the refcount on an openfile */
+void openfile_incref(struct openfile *);
+void openfile_decref(struct openfile *);
+
+
+#endif /* _OPENFILE_H_ */
