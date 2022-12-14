@@ -33,6 +33,8 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <proc.h>
+#include <spl.h>
+#include <mips/tlb.h>
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -50,9 +52,13 @@ as_create(void)
 		return NULL;
 	}
 
-	/*
-	 * Initialize as needed.
-	 */
+	as->as_vbase1 = 0;
+	as->as_pbase1 = 0;
+	as->as_npages1 = 0;
+	as->as_vbase2 = 0;
+	as->as_pbase2 = 0;
+	as->as_npages2 = 0;
+	as->as_stackpbase = 0;
 
 	return as;
 }
@@ -80,10 +86,6 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 void
 as_destroy(struct addrspace *as)
 {
-	/*
-	 * Clean up as needed.
-	 */
-
 	kfree(as);
 }
 
@@ -101,19 +103,20 @@ as_activate(void)
 		return;
 	}
 
-	/*
-	 * Write this.
-	 */
+	int i, spl;
+	spl = splhigh();
+
+	for (i = 0; i < NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+
+	splx(spl);
 }
 
 void
 as_deactivate(void)
 {
-	/*
-	 * Write this. For many designs it won't need to actually do
-	 * anything. See proc.c for an explanation of why it (might)
-	 * be needed.
-	 */
+	// not needed 
 }
 
 /*
@@ -130,16 +133,31 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
 {
-	/*
-	 * Write this.
-	 */
-
-	(void)as;
-	(void)vaddr;
-	(void)sz;
 	(void)readable;
 	(void)writeable;
 	(void)executable;
+
+	size_t npages;
+
+	sz += vaddr & ~(vaddr_t)PAGE_FRAME;
+	vaddr &= PAGE_FRAME;	// Base alignment
+
+	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME;		// Length alignment
+
+	npages = sz / PAGE_SIZE;
+
+	if (as->as_vbase1 == 0) {
+		as->as_vbase1 = vaddr;
+		as->as_npages1 = npages;
+		return 0;
+	}
+
+	if (as->as_vbase2 == 0) {
+		as->as_vbase2 = vaddr;
+		as->as_npages2 = npages;
+		return 0;
+	}
+
 	return ENOSYS;
 }
 
@@ -157,10 +175,6 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
 	(void)as;
 	return 0;
 }
@@ -174,7 +188,6 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 
 	(void)as;
 
-	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 
 	return 0;
